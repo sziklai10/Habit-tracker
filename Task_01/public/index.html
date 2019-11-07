@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+ 
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>Money Tracking App</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@2.8.0/dist/Chart.min.js"></script>
+    <style>
+        p {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+ 
+        }
+
+ 
+        .alcoholInfo {
+            font-size: 0, 5em;
+            text-align: center;
+ 
+        }
+ 
+        h1 {
+            text-align: center;
+            font-family: "Arial Black", Gadget, sans-serif;
+
+        }
+ 
+        button {
+            color: white;
+            background: blue;
+        }
+ 
+        #images,
+        #alcoholQuestion {
+            display: inline-block;
+        }
+ 
+        #images {
+            float: right;
+        }
+        body {
+            background: #555;
+        }
+
+        .content {
+            max-width: 500px;
+            margin: auto;
+            background: white;
+            padding: 10px;
+        }
+
+        
+ 
+    </style>
+</head>
+ 
+<body onload="chartIt()">
+    <div class="content">
+    <h1>How much money do you spend?</h1><br>
+
+    <p style="text-align: center">On this app you can submit how much money do you spend on a day when you drinking and eat out and when you don't</p><br>
+    <p style="text-align: center">Try it and you will see how alcohol and food affect your spending habits!</p>
+ <br>
+    <hr>
+
+    <div id='sliderContainer'>
+        <p><label for="money">How much £ did you spent?</label> <br>
+            <input type="range" id="money" min="0" max="200" value="0"oninput="sliderChange(this.value)">
+            <output id="sliderVal"> </output>
+            <hr>
+            <p id="alcoholQuestion"><label for="alcohol">How many alcohol units did you have?</label>
+                <div id="images"></div>
+            </p>
+ 
+            <br>
+ 
+            <input type="range" id="alcohol" min="0" max="20" value="0" oninput="sliderChange1(this.value)">
+            <output id="sliderVal1"> </output>
+            <select id="selectProduct">
+                <option>Thatchers Gold</option>
+                <option>Amstel</option>
+            </select>
+           
+            <hr>
+ 
+            <p><label for="eatingOut">How many times did you eat out?</label> <br>
+                <input type="range" id="eatingOut" min="0" max="5" value="0" oninput="sliderChange2(this.value)">
+                <output id="sliderVal2"> </output>
+                <hr> 
+                <button id="submit">submit</button>
+                <br>
+                <br>
+            </p>
+    </div>
+ 
+ 
+ 
+    <p id="container">
+    </p>
+ 
+    <p>
+        <canvas id="chart" width="428" height="214" class="chartjs-render-monitor"></canvas>
+        <canvas id="pieChart" width="428" height="214" class="chartjs-render-monitor"></canvas>
+
+    </p>
+ 
+ 
+    <script> 
+        function sliderChange(val) { //
+            document.getElementById('sliderVal').innerHTML = val; //getting the data from the slider 
+        }
+ 
+        function sliderChange1(val) {
+            document.getElementById('sliderVal1').innerHTML = val; //getting the data from the slider 
+        }
+ 
+        function sliderChange2(val) {
+            document.getElementById('sliderVal2').innerHTML = val; //getting the data from the slider 
+        }
+        const buttonSubmit = document.getElementById('submit');
+        buttonSubmit.addEventListener('click', async event => {  //listening to the submit button
+ 
+            const money = document.getElementById('money').value; //getting the value from the element with id money
+            const alcohol = document.getElementById('alcohol').value; //getting the element from the alcohol
+            const eatingOut = document.getElementById('eatingOut').value; //getting the element from the eatingOut
+ 
+            const data = {
+                money,
+                alcohol,
+                eatingOut
+            }; //getting the data for money,alcohol,eatingout
+            const options = { //accesing json
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            };
+
+            const response = await fetch('/api');
+            const dataStuff = await response.json(); //calling json for the database
+
+            let today = Date.now();
+            let dayInMilliseconds = 86400000;
+            let yesterday = today - dayInMilliseconds;
+
+            if (dataStuff[dataStuff.length - 1].timestamp < yesterday){ 
+                const submitData = await fetch('/api', options); //getting the data from the database
+                const json = await submitData.json(); //calling  json for the database
+            } else {
+                alert("You've already submited data today!");
+            }
+ 
+            let selectProduct = document.getElementById('selectProduct'); //select the product from the external api
+            let product = selectProduct.options[selectProduct.selectedIndex].value;
+ 
+            const response1 = await fetch('https://public.opendatasoft.com/api/records/1.0/search/?dataset=units-of-alcohol&facet=brand&facet=category&facet=style&facet=package&refine.product=' + product); //getting the external api
+ 
+            const json1 = await response1.json(); //calling json for the external api
+            console.log(JSON.stringify(json1));
+ 
+            var container = document.getElementById('container');
+            container.innerHTML = "";
+            let fields = json1['records'][0]['fields']; //checking the fields from the external api
+            let units = fields['units_o_alcohol'] * alcohol; //checking the alcohol units from the external api
+            document.getElementById("images").innerHTML="";
+            for (let x = 0; x < Math.round(units); x++) { //rounding up the units for the drinks 
+                document.getElementById("images").innerHTML += "<img src='beer.png'>"; //diplay the beer image depending on how much unit you drink
+            }
+ 
+            container.innerHTML += "<br>";
+ 
+            chartIt(); // calling the chart function
+        });
+ 
+        // Task 01
+        async function chartIt() { //creating the chart function
+            const response = await fetch('/api'); //getting the elements from the database
+            const dataStuff = await response.json(); //calling json for the database
+ 
+            const habits = mapJsonData(dataStuff, 7);
+
+            var chartData = { //creating the line on the chart by the money
+                labels: habits.dates,
+                datasets: [{
+                    type: 'line',
+                    label: 'Money',
+                    borderColor: "blue",
+                    borderWidth: 3,
+                    fill: false,
+                    data: habits.money
+
+                }, { //creating the bar on the chart by the alcohol
+                    type: 'bar',
+                    label: 'Alcohol',
+                    backgroundColor: "red",
+                    data: habits.alcohol,
+                    borderColor: 'white',
+                    borderWidth: 2
+                }, { //creating the bar on the chart by the eating out
+                    type: 'bar',
+                    label: 'Eating out',
+                    backgroundColor: "green",
+                    data: habits.eatingOut
+                }]
+            };
+ 
+            const ctx = document.getElementById('chart').getContext('2d'); //creates the chart on the screen
+            const myChart = new Chart(ctx, {
+                type: 'bar',
+                data: chartData,
+                options: {
+                    responsive: true,
+                    title: {
+                        display: true,
+                        text: 'My spending habits in the last week'
+                    },
+                    tooltips: {
+                        mode: 'index',
+                        intersect: true
+                    }
+                }
+            });
+
+            let habits2 = mapJsonData(dataStuff, 31);
+            let totalMoney = habits2.money.reduce((a, b) => parseInt(a) + parseInt(b));
+            let totalUnits = habits2.alcohol.reduce((a, b) => parseInt(a) + parseInt(b));
+            let totalEating = habits2.eatingOut.reduce((a, b) => parseInt(a) + parseInt(b));
+
+            
+
+            data = {
+                datasets: [{
+                    data: [totalMoney, totalUnits, totalEating],
+                    backgroundColor: ["blue", "red", "green"]
+                }],
+
+                // These labels appear in the legend and in the tooltips when hovering different arcs
+                labels: [
+                    'Money',
+                    'Units',
+                    'Times eaten'
+                ]
+            };            
+            let pieCtx = document.getElementById('pieChart').getContext('2d'); //creates the chart on the screen
+
+            var myPieChart = new Chart(pieCtx, {
+                type: 'pie',
+                data: data,
+                options: {
+                    title:{
+                        display: true,
+                        text:'My spending habits in the last month'
+                    }
+
+                }
+            });
+ 
+ 
+        }
+
+        function mapJsonData(dataSet, timeInDays){
+            var habits = { //creates an object containing arrays for the money,alcohol,eatingout, dates
+                money: [],
+                alcohol: [],
+                eatingOut: [],
+                dates: []
+            };
+
+            let startingPoint = 0;
+
+            if (dataSet.length >= timeInDays){
+                startingPoint = dataSet.length - timeInDays;
+            } 
+
+            let x = 0;
+            for (let i = startingPoint; i < dataSet.length; i++) {
+                habits.dates[x] = new Date(dataSet[i].timestamp).toLocaleDateString(); //
+                habits.money[x] = dataSet[i].money;
+                habits.alcohol[x] = dataSet[i].alcohol;
+                habits.eatingOut[x] = dataSet[i].eatingOut;
+                x++;
+            }
+            return habits;
+        }
+ 
+    </script>
+     <div class="content">
+</body>
+ 
+</html>
